@@ -1,4 +1,4 @@
-package com.fulfilment.application.monolith.fulfillment;
+package com.fulfilment.application.monolith.fulfillment.adapter.restapi;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 

@@ -1,4 +1,4 @@
-package com.fulfilment.application.monolith.warehouses.domain.usecases;
+package com.fulfilment.application.monolith.warehouses.domain.validators;
 
 import com.fulfilment.application.monolith.warehouses.domain.exceptions.WarehouseValidationException;
 import com.fulfilment.application.monolith.warehouses.domain.models.Location;

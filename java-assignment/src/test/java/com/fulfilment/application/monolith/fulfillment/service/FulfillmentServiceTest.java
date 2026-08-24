@@ -1,4 +1,4 @@
-package com.fulfilment.application.monolith.fulfillment;
+package com.fulfilment.application.monolith.fulfillment.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -9,9 +9,12 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.fulfilment.application.monolith.fulfillment.adapter.database.FulfillmentRepository;
 import com.fulfilment.application.monolith.fulfillment.exceptions.FulfillmentConflictException;
 import com.fulfilment.application.monolith.fulfillment.exceptions.FulfillmentConstraintViolationException;
 import com.fulfilment.application.monolith.fulfillment.exceptions.FulfillmentNotFoundException;
+import com.fulfilment.application.monolith.fulfillment.model.Fulfillment;
+import com.fulfilment.application.monolith.fulfillment.validator.FulfillmentValidator;
 import com.fulfilment.application.monolith.products.Product;
 import com.fulfilment.application.monolith.products.ProductRepository;
 import com.fulfilment.application.monolith.stores.Store;
@@ -22,6 +25,11 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+/**
+ * Service-level tests exercise the full flow (existence checks + delegating to {@link
+ * FulfillmentValidator}) through the public API. Rule-by-rule edge cases for the validator itself
+ * live in {@code FulfillmentValidatorTest}.
+ */
 public class FulfillmentServiceTest {
 
   private static final Long PRODUCT_ID = 1L;
@@ -40,7 +48,14 @@ public class FulfillmentServiceTest {
     productRepository = mock(ProductRepository.class);
     storeRepository = mock(StoreRepository.class);
     warehouseRepository = mock(WarehouseRepository.class);
-    service = new FulfillmentService(fulfillmentRepository, productRepository, storeRepository, warehouseRepository);
+    FulfillmentValidator fulfillmentValidator = new FulfillmentValidator(fulfillmentRepository);
+    service =
+        new FulfillmentService(
+            fulfillmentRepository,
+            productRepository,
+            storeRepository,
+            warehouseRepository,
+            fulfillmentValidator);
 
     when(productRepository.findByIdOptional(PRODUCT_ID)).thenReturn(Optional.of(new Product("TONSTAD")));
     when(storeRepository.findByIdOptional(STORE_ID)).thenReturn(Optional.of(new Store("KALLAX")));
@@ -88,7 +103,9 @@ public class FulfillmentServiceTest {
   }
 
   @Test
-  public void testCreateAssociationThrowsWhenDuplicate() {
+  public void testCreateAssociationThrowsWhenValidatorRejectsDuplicate() {
+    // integration-style: proves the service actually consults FulfillmentValidator's rules,
+    // rather than duplicating the rule-by-rule checks already covered in FulfillmentValidatorTest.
     when(fulfillmentRepository.exists(PRODUCT_ID, STORE_ID, WAREHOUSE_ID)).thenReturn(true);
 
     assertThrows(
@@ -98,41 +115,11 @@ public class FulfillmentServiceTest {
   }
 
   @Test
-  public void testCreateAssociationThrowsWhenMaxWarehousesPerProductPerStoreReached() {
-    when(fulfillmentRepository.countDistinctWarehousesForProductAndStore(PRODUCT_ID, STORE_ID))
-        .thenReturn((long) FulfillmentService.MAX_WAREHOUSES_PER_PRODUCT_PER_STORE);
-
-    assertThrows(
-        FulfillmentConstraintViolationException.class,
-        () -> service.createAssociation(PRODUCT_ID, STORE_ID, WAREHOUSE_ID));
-    verify(fulfillmentRepository, never()).persist(anyFulfillment());
-  }
-
-  @Test
-  public void testCreateAssociationAllowsUpToOneBelowMaxWarehousesPerProductPerStore() {
-    when(fulfillmentRepository.countDistinctWarehousesForProductAndStore(PRODUCT_ID, STORE_ID))
-        .thenReturn((long) FulfillmentService.MAX_WAREHOUSES_PER_PRODUCT_PER_STORE - 1);
-
-    service.createAssociation(PRODUCT_ID, STORE_ID, WAREHOUSE_ID);
-
-    verify(fulfillmentRepository, times(1)).persist(anyFulfillment());
-  }
-
-  @Test
-  public void testCreateAssociationThrowsWhenMaxWarehousesPerStoreReached() {
+  public void testCreateAssociationThrowsWhenValidatorRejectsConstraintViolation() {
+    // integration-style: same idea, but for a cardinality-constraint rejection instead of a
+    // duplicate rejection.
     when(fulfillmentRepository.countDistinctWarehousesForStore(STORE_ID))
-        .thenReturn((long) FulfillmentService.MAX_WAREHOUSES_PER_STORE);
-
-    assertThrows(
-        FulfillmentConstraintViolationException.class,
-        () -> service.createAssociation(PRODUCT_ID, STORE_ID, WAREHOUSE_ID));
-    verify(fulfillmentRepository, never()).persist(anyFulfillment());
-  }
-
-  @Test
-  public void testCreateAssociationThrowsWhenMaxProductsPerWarehouseReached() {
-    when(fulfillmentRepository.countDistinctProductsForWarehouse(WAREHOUSE_ID))
-        .thenReturn((long) FulfillmentService.MAX_PRODUCTS_PER_WAREHOUSE);
+        .thenReturn((long) FulfillmentValidator.MAX_WAREHOUSES_PER_STORE);
 
     assertThrows(
         FulfillmentConstraintViolationException.class,

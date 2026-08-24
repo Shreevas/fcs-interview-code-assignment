@@ -1,8 +1,9 @@
-package com.fulfilment.application.monolith.fulfillment;
+package com.fulfilment.application.monolith.fulfillment.service;
 
-import com.fulfilment.application.monolith.fulfillment.exceptions.FulfillmentConflictException;
-import com.fulfilment.application.monolith.fulfillment.exceptions.FulfillmentConstraintViolationException;
+import com.fulfilment.application.monolith.fulfillment.adapter.database.FulfillmentRepository;
 import com.fulfilment.application.monolith.fulfillment.exceptions.FulfillmentNotFoundException;
+import com.fulfilment.application.monolith.fulfillment.model.Fulfillment;
+import com.fulfilment.application.monolith.fulfillment.validator.FulfillmentValidator;
 import com.fulfilment.application.monolith.products.ProductRepository;
 import com.fulfilment.application.monolith.stores.StoreRepository;
 import com.fulfilment.application.monolith.warehouses.adapters.database.DbWarehouse;
@@ -15,26 +16,25 @@ import org.jboss.logging.Logger;
 @ApplicationScoped
 public class FulfillmentService {
 
-  static final int MAX_WAREHOUSES_PER_PRODUCT_PER_STORE = 2;
-  static final int MAX_WAREHOUSES_PER_STORE = 3;
-  static final int MAX_PRODUCTS_PER_WAREHOUSE = 5;
-
   private static final Logger LOGGER = Logger.getLogger(FulfillmentService.class);
 
   private final FulfillmentRepository fulfillmentRepository;
   private final ProductRepository productRepository;
   private final StoreRepository storeRepository;
   private final WarehouseRepository warehouseRepository;
+  private final FulfillmentValidator fulfillmentValidator;
 
   public FulfillmentService(
       FulfillmentRepository fulfillmentRepository,
       ProductRepository productRepository,
       StoreRepository storeRepository,
-      WarehouseRepository warehouseRepository) {
+      WarehouseRepository warehouseRepository,
+      FulfillmentValidator fulfillmentValidator) {
     this.fulfillmentRepository = fulfillmentRepository;
     this.productRepository = productRepository;
     this.storeRepository = storeRepository;
     this.warehouseRepository = warehouseRepository;
+    this.fulfillmentValidator = fulfillmentValidator;
   }
 
   @Transactional
@@ -50,28 +50,10 @@ public class FulfillmentService {
       throw new FulfillmentNotFoundException("Warehouse with id of " + warehouseId + " does not exist.");
     }
 
-    if (fulfillmentRepository.exists(productId, storeId, warehouseId)) {
-      throw new FulfillmentConflictException(
-          "Product " + productId + " is already fulfilled by warehouse " + warehouseId + " at store " + storeId + ".");
-    }
-
-    if (fulfillmentRepository.countDistinctWarehousesForProductAndStore(productId, storeId)
-        >= MAX_WAREHOUSES_PER_PRODUCT_PER_STORE) {
-      throw new FulfillmentConstraintViolationException(
-          "Product " + productId + " already has the maximum of "
-              + MAX_WAREHOUSES_PER_PRODUCT_PER_STORE
-              + " fulfillment warehouses for store " + storeId + ".");
-    }
-
-    if (fulfillmentRepository.countDistinctWarehousesForStore(storeId) >= MAX_WAREHOUSES_PER_STORE) {
-      throw new FulfillmentConstraintViolationException(
-          "Store " + storeId + " already has the maximum of " + MAX_WAREHOUSES_PER_STORE + " fulfillment warehouses.");
-    }
-
-    if (fulfillmentRepository.countDistinctProductsForWarehouse(warehouseId) >= MAX_PRODUCTS_PER_WAREHOUSE) {
-      throw new FulfillmentConstraintViolationException(
-          "Warehouse " + warehouseId + " already stores the maximum of " + MAX_PRODUCTS_PER_WAREHOUSE + " product types.");
-    }
+    fulfillmentValidator.requireNotDuplicate(productId, storeId, warehouseId);
+    fulfillmentValidator.requireWarehouseCountFeasibleForProductAndStore(productId, storeId);
+    fulfillmentValidator.requireWarehouseCountFeasibleForStore(storeId);
+    fulfillmentValidator.requireProductCountFeasibleForWarehouse(warehouseId);
 
     Fulfillment fulfillment = new Fulfillment(productId, storeId, warehouseId);
     fulfillmentRepository.persist(fulfillment);

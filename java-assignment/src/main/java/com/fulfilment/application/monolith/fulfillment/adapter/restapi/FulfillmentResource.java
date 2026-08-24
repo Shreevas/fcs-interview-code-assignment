@@ -1,5 +1,7 @@
-package com.fulfilment.application.monolith.fulfillment;
+package com.fulfilment.application.monolith.fulfillment.adapter.restapi;
 
+import com.fulfilment.application.monolith.fulfillment.model.Fulfillment;
+import com.fulfilment.application.monolith.fulfillment.service.FulfillmentService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
