@@ -1,9 +1,11 @@
 package com.fulfilment.application.monolith.stores;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fulfilment.application.monolith.stores.events.StoreChangeType;
+import com.fulfilment.application.monolith.stores.events.StoreChangedEvent;
+import com.fulfilment.application.monolith.stores.events.StoreSnapshot;
 import io.quarkus.panache.common.Sort;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.Consumes;
@@ -16,8 +18,6 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
-import jakarta.ws.rs.ext.ExceptionMapper;
-import jakarta.ws.rs.ext.Provider;
 import java.util.List;
 import org.jboss.logging.Logger;
 
@@ -27,9 +27,9 @@ import org.jboss.logging.Logger;
 @Consumes("application/json")
 public class StoreResource {
 
-  @Inject LegacyStoreManagerGateway legacyStoreManagerGateway;
+  private static final Logger LOGGER = Logger.getLogger(StoreResource.class);
 
-  private static final Logger LOGGER = Logger.getLogger(StoreResource.class.getName());
+  @Inject Event<StoreChangedEvent> storeChangedEvent;
 
   @GET
   public List<Store> get() {
@@ -54,8 +54,9 @@ public class StoreResource {
     }
 
     store.persist();
+    LOGGER.infof("Created store [ id=%d, name=%s ]", store.id, store.name);
 
-    legacyStoreManagerGateway.createStoreOnLegacySystem(store);
+    storeChangedEvent.fire(new StoreChangedEvent(StoreChangeType.CREATED, snapshotOf(store)));
 
     return Response.ok(store).status(201).build();
   }
@@ -77,7 +78,7 @@ public class StoreResource {
     entity.name = updatedStore.name;
     entity.quantityProductsInStock = updatedStore.quantityProductsInStock;
 
-    legacyStoreManagerGateway.updateStoreOnLegacySystem(updatedStore);
+    storeChangedEvent.fire(new StoreChangedEvent(StoreChangeType.UPDATED, snapshotOf(entity)));
 
     return entity;
   }
@@ -96,15 +97,15 @@ public class StoreResource {
       throw new WebApplicationException("Store with id of " + id + " does not exist.", 404);
     }
 
-    if (entity.name != null) {
+    if (updatedStore.name != null) {
       entity.name = updatedStore.name;
     }
 
-    if (entity.quantityProductsInStock != 0) {
+    if (updatedStore.quantityProductsInStock != 0) {
       entity.quantityProductsInStock = updatedStore.quantityProductsInStock;
     }
 
-    legacyStoreManagerGateway.updateStoreOnLegacySystem(updatedStore);
+    storeChangedEvent.fire(new StoreChangedEvent(StoreChangeType.UPDATED, snapshotOf(entity)));
 
     return entity;
   }
@@ -121,29 +122,7 @@ public class StoreResource {
     return Response.status(204).build();
   }
 
-  @Provider
-  public static class ErrorMapper implements ExceptionMapper<Exception> {
-
-    @Inject ObjectMapper objectMapper;
-
-    @Override
-    public Response toResponse(Exception exception) {
-      LOGGER.error("Failed to handle request", exception);
-
-      int code = 500;
-      if (exception instanceof WebApplicationException) {
-        code = ((WebApplicationException) exception).getResponse().getStatus();
-      }
-
-      ObjectNode exceptionJson = objectMapper.createObjectNode();
-      exceptionJson.put("exceptionType", exception.getClass().getName());
-      exceptionJson.put("code", code);
-
-      if (exception.getMessage() != null) {
-        exceptionJson.put("error", exception.getMessage());
-      }
-
-      return Response.status(code).entity(exceptionJson).build();
-    }
+  private static StoreSnapshot snapshotOf(Store store) {
+    return new StoreSnapshot(store.id, store.name, store.quantityProductsInStock);
   }
 }

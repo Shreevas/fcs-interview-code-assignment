@@ -7,9 +7,9 @@ public interface WarehouseStore {
 
   List<Warehouse> getAll();
 
-  void create(Warehouse warehouse);
+  Warehouse create(Warehouse warehouse);
 
-  void update(Warehouse warehouse);
+  Warehouse update(Warehouse warehouse);
 
   void remove(Warehouse warehouse);
 
