@@ -1,4 +1,4 @@
-package com.fulfilment.application.monolith.warehouses.domain.usecases;
+package com.fulfilment.application.monolith.warehouses.domain.validators;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;

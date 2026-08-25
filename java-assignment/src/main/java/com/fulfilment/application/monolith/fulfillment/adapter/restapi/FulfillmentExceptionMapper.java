@@ -1,4 +1,4 @@
-package com.fulfilment.application.monolith.fulfillment;
+package com.fulfilment.application.monolith.fulfillment.adapter.restapi;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fulfilment.application.monolith.common.web.ErrorResponseFactory;

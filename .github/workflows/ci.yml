@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "CODE/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Build, test and enforce coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+          cache-dependency-path: java-assignment/pom.xml
+
+      - name: Build, test and check coverage (>= 80%)
+        working-directory: java-assignment
+        run: ./mvnw -B verify
+
+      - name: Publish coverage summary
+        if: always()
+        working-directory: java-assignment
+        run: |
+          python3 - <<'EOF' >> "$GITHUB_STEP_SUMMARY"
+          import xml.etree.ElementTree as ET
+          root = ET.parse("target/site/jacoco/jacoco.xml").getroot()
+          rows = []
+          for c in root.findall("counter"):
+              if c.get("type") in ("INSTRUCTION", "LINE", "BRANCH"):
+                  covered, missed = int(c.get("covered")), int(c.get("missed"))
+                  total = covered + missed
+                  rows.append((c.get("type"), covered, total, covered / total * 100 if total else 0))
+          print("## JaCoCo coverage summary\n")
+          print("| Metric | Covered | Total | % |")
+          print("|---|---|---|---|")
+          for kind, covered, total, pct in rows:
+              print(f"| {kind.title()} | {covered} | {total} | {pct:.1f}% |")
+          print("\nGate: 80% instruction/line coverage, enforced by `jacoco-maven-plugin:check` during `./mvnw verify`.")
+          EOF
+
+      - name: Upload JaCoCo coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-report
+          path: java-assignment/target/site/jacoco/
+
+      - name: Upload surefire test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: java-assignment/target/surefire-reports/

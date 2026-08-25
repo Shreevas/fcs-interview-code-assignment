@@ -5,6 +5,7 @@ import com.fulfilment.application.monolith.warehouses.domain.models.Location;
 import com.fulfilment.application.monolith.warehouses.domain.models.Warehouse;
 import com.fulfilment.application.monolith.warehouses.domain.ports.CreateWarehouseOperation;
 import com.fulfilment.application.monolith.warehouses.domain.ports.WarehouseStore;
+import com.fulfilment.application.monolith.warehouses.domain.validators.WarehouseFeasibilityValidator;
 import jakarta.enterprise.context.ApplicationScoped;
 import java.time.LocalDateTime;
 import java.util.List;
